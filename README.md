@@ -13,8 +13,10 @@
 let ruyirun=function (){
 Object.defineProperty(Ruyiniubi.prototype, "ruyihook", { value: true });
 let ruyiniubi=new Ruyiniubi;
-let others = [
-"Uint8Array","ArrayBuffer","Reflect","JSON","Proxy","isNaN","Promise",
+let others = ["console","Node",
+"Float32Array","Float64Array","Int16Array","Uint16Array","Int32Array","Uint32Array",
+"Uint8ClampedArray","Int8Array","Uint8Array",
+"ArrayBuffer","Reflect","JSON","Proxy","isNaN","Promise",
 "RegExp","Set","WeakMap","Performance","parseInt",
 "Map", "BigInt", "DataView", "Boolean", "Mojo", "Array", "String", "Object", "Date","Symbol", "Number",
 "Function", "Math", "dir", "dirxml", "profile", "profileEnd", "table",
@@ -23,49 +25,112 @@ let others = [
 "$", "getEventListeners", "getAccessibleName", "getAccessibleRole",
 "monitorEvents", "unmonitorEvents", "clear"
 ];
-ruyigetjs = function(target, prop) {
-    // 如果prop在排除名单中，则不执行打印
-    if (others.includes(prop)) {
+    
+// ruyigetjs = function(target, prop) {
+//     // 排除某些属性
+//     if (others.includes(prop)) return;
+
+//     let now = Date.now();
+//     let propName = (typeof prop === "symbol") ? prop.toString() : prop;
+
+//     let value;
+//     try {
+//         value = target[prop];
+//     } catch (e) {
+//         value = "[Access Error: " + e.message + "]";
+//     }
+
+//     // 增强输出：加上类型信息
+//     let valueStr;
+//     try {
+//         if (typeof value === "function") {
+//             valueStr = "[Function]";
+//         } else if (typeof value === "object" && value !== null) {
+//             valueStr = JSON.stringify(value, null, 2);
+//         } else {
+//             valueStr = String(value);
+//         }
+//     } catch (e) {
+//         valueStr = target[propName];
+//     }
+
+//     console.ruyilog(`[RUYI-get]: [${now}] ${target} -> ${propName} -> ${valueStr}`);
+// };
+
+// ruyisetjs = function(target, prop, value) {
+//     // 如果在排除名单中，跳过打印
+//     if (others.includes(prop)) return;
+
+//     let now = Date.now();
+//     let propName = (typeof prop === "symbol") ? prop.toString() : prop;
+
+//     // 安全字符串化 value
+//     let valueStr;
+//     try {
+//         if (typeof value === "function") {
+//             valueStr = "[Function]";
+//         } else if (typeof value === "object" && value !== null) {
+//             valueStr = JSON.stringify(value, null, 2);
+//         } else {
+//             valueStr = String(value);
+//         }
+//     } catch (e) {
+//         valueStr = target[propName];
+//     }
+
+//     console.ruyilog(`[RUYI-set]: [${now}] ${target} -> ${propName} -> ${valueStr}`);
+// };
+
+//去重
+const ruyiPrintCache = new Set();
+const ruyiCacheTTL = 2000; // 1秒内相同日志不再打印
+funcjs = function(target, funcname, args, value, exception) {
+    const excludedClasses = [Performance];
+    if (excludedClasses.some(cls => typeof cls !== "undefined" && target instanceof cls)) {
+        return;
+    }
+    if (["requestAnimationFrame"].includes(funcname)){
         return;
     }
     let now = Date.now();
-    // 将属性名转换成字符串以避免Symbol错误
-    let propName = (typeof prop === "symbol") ? prop.toString() : prop;
-    ruyiniubi.print("[RUYI-get]:" + "[" + now + "]" + target + "->" + propName + "->", target[prop]);
-};
+    const key = `${target}->${funcname}->${args}->${value}`;
 
-ruyisetjs = function(target, prop, value) {
-
-    // 如果prop在排除名单中，则不执行打印
-    if (others.includes(prop)) {
-        return;
-    }
-    let now = Date.now();
-    let propName = (typeof prop === "symbol") ? prop.toString() : prop;
-    console.log("[RUYI-set]:" + "[" + now + "]" + target + "->" + propName + "->", value);
-};
-
-funcjs = function(target, funcname,args, value,exception) {
-    let now = Date.now();
-    if(!exception){
-        console.log("[RUYI-func]:" + "[" + now + "]" + target + "->" + funcname + "->"+args+ "->"+value);
-    }else{
-        console.log("[RUYI-func-exception]:" + "[" + now + "]" + target + "->" + funcname + "->"+args+ "->"+value);
+    if (ruyiPrintCache.has(key)) {
+        return; // 已打印过，跳过
     }
 
+    // 新的打印，记录并设置过期清除
+    ruyiPrintCache.add(key);
+    setTimeout(() => ruyiPrintCache.delete(key), ruyiCacheTTL);
+
+    if (!exception) {
+        console.ruyiwarn(`[RUYI-func]:[${now}]${key}`);
+    } else {
+        console.ruyilog(`[RUYI-func-exception]:[${now}]${key}`);
+    }
 };
     
 hooklog = true;
+
+// 20秒后自动关闭hook日志
+setTimeout(() => {
+    hooklog = false;
+    ruyiniubi.print("[RUYI] hooklog 已自动关闭");
+}, 20000);
+
+    
 }
 
 ruyirun();
 ```
-3. 浏览器控制台中就有日志信息了。要终止只需
+3. 浏览器控制台中就有日志信息了，脚本里写的默认20秒后停止（防止信息太多）。手动要终止只需
 ```JavaScript
 hooklog = false;
 或者
 Object.defineProperty(Ruyiniubi.prototype, "ruyihook", { value: false });
 ```
+4. 由于其中可能打印海量的信息，一开始可以只开启funcjs，并且手动添加过滤一些重复的。
+5. 如有需要可以开启ruyigetjs和ruyisetjs，不过可能信息太多导致崩溃，可以每次只开一个，慢慢查看信息。
 
 # 免责声明
 本免责声明旨在明确指出，本项目为课程教学产品，不得将本项目技术用于任何非法目的或破坏行为。作者对于任何使用本项目对他人或系统造成的损害概不负责。
